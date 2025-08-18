@@ -1,0 +1,17 @@
+{
+  "itemGroup.dragon": "Ben's Beastiary",
+
+  "entity.minecraft.basilisk": "Basilisk",
+
+  "item.dragon.basilisk_spawn_egg": "Basilisk Spawn Egg",
+  "item.dragon.basilisk_blood": "Basilisk Blood",
+  "item.dragon.goggles": "Goggles",
+
+  "dragon.configuration.title": "Ben's Beastiary Configs",
+  "dragon.configuration.section.dragon.common.toml": "Ben's Beastiary Mod Configs",
+  "dragon.configuration.section.dragon.common.toml.title": "Ben's Beastiary Configs",
+  "dragon.configuration.items": "Item List",
+  "dragon.configuration.logDirtBlock": "Log Dirt Block",
+  "dragon.configuration.magicNumberIntroduction": "Magic Number Text",
+  "dragon.configuration.magicNumber": "Magic Number"
+}

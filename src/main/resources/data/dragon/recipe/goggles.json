@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "GLG"
+  ],
+  "key": {
+    "G": ["minecraft:glass_pane"],
+    "S": ["minecraft:string"],
+    "L": ["minecraft:leather"]
+  },
+  "result": {
+    "id": "dragon:goggles",
+    "count": 1
+  }
+}
