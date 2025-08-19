@@ -1,8 +1,8 @@
 package com.Benhanan14406.dragon.entities;
 
 import com.Benhanan14406.dragon.BensBeastiary;
+import com.Benhanan14406.dragon.entities.ai.goal.CustomMeleeAttackGoal;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -11,9 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.util.Mth;
 import net.minecraft.util.TimeUtil;
 import net.minecraft.util.valueproviders.UniformInt;
 import net.minecraft.world.DifficultyInstance;
@@ -27,21 +25,16 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.*;
 import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
-import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
-import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.animal.FlyingAnimal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
-import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.pathfinder.*;
@@ -61,25 +54,21 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
-public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, FlyingAnimal, GeoAnimatable {
+public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAnimatable {
     private static final ResourceLocation SPEED_MODIFIER_ATTACKING_ID = ResourceLocation.withDefaultNamespace("attacking");
     private static final AttributeModifier SPEED_MODIFIER_ATTACKING = new AttributeModifier(SPEED_MODIFIER_ATTACKING_ID, 0.15F, AttributeModifier.Operation.ADD_VALUE);
 
     private static final EntityDataAccessor<Integer> DATA_REMAINING_ANGER_TIME = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DECAPITATED = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> HAS_GOGGLES = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<Boolean> CROUCHED = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> SLEEPING = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<Boolean> FLYING = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
 
     private static final UniformInt PERSISTENT_ANGER_TIME = TimeUtil.rangeOfSeconds(20, 39);
     int remainingLife = 1200;
     @javax.annotation.Nullable
     private UUID persistentAngerTarget;
-    private int walkTimer = 300;
 
     protected static final RawAnimation FLY = RawAnimation.begin().thenLoop("flying");
     protected static final RawAnimation IDLE = RawAnimation.begin().thenLoop("idle");
@@ -122,13 +111,8 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
 
     public Basilisk(EntityType<? extends TamableAnimal> entityType, Level level) {
         super(entityType, level);
-        if (this.isFlying()) {
-            this.navigation = new FlyingPathNavigation(this, level);
-            this.moveControl = new FlyingMoveControl(this, 10, false);
-        } else {
-            this.navigation = new BasiliskPathNavigation(this, level);
-            this.moveControl = new SmoothSwimmingMoveControl(this, 85, 30, 1.0F, 1.0F, true);
-        }
+        this.navigation = new BasiliskPathNavigation(this, level());
+        this.moveControl = new SmoothSwimmingMoveControl(this, 60, 30, 1.0F, 1.0F, true);
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -148,10 +132,8 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
     protected void registerGoals() {
         this.goalSelector.addGoal(1, new ToggleableFollowOwnerGoal(this, 1.0F, 10.0F, 2.0F));
         this.goalSelector.addGoal(2, new FreezeWhenLookedAt(this));
-        this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0F, true));
-        this.goalSelector.addGoal(6, new SeekShelterGoal(this, 1.0F));
-        this.goalSelector.addGoal(7, new SleepGoal(this));
-        this.goalSelector.addGoal(8, new BasiliskRandomFlyGoal(this, 1.0F));
+        this.goalSelector.addGoal(5, new CustomMeleeAttackGoal(this, 1.0F, true));
+        this.goalSelector.addGoal(7, new BasiliskSleepGoal(this));
         this.goalSelector.addGoal(8, new BasiliskRandomStrollGoal(this, 1.0F));
         this.goalSelector.addGoal(9, new LookAtPlayerGoal(this, Player.class, 15.0F));
         this.goalSelector.addGoal(10, new RandomLookAroundGoal(this));
@@ -168,9 +150,7 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         builder.define(DATA_REMAINING_ANGER_TIME, 0);
         builder.define(DECAPITATED, false);
         builder.define(HAS_GOGGLES, false);
-        builder.define(CROUCHED, false);
         builder.define(SLEEPING, false);
-        builder.define(FLYING, false);
     }
 
     protected void addAdditionalSaveData(@NotNull ValueOutput valueOutput) {
@@ -240,11 +220,6 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
     }
 
     @Override
-    public double getTick(@Nullable Object object) {
-        return 0;
-    }
-
-    @Override
     public boolean isFood(@NotNull ItemStack itemStack) {
         return itemStack.is(Items.BEEF)
                 || itemStack.is(Items.CHICKEN)
@@ -257,7 +232,6 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
                 || itemStack.is(Items.PUMPKIN_SEEDS)
                 || itemStack.is(Items.APPLE);
     }
-
 
     public @NotNull InteractionResult mobInteract(Player player, @NotNull InteractionHand hand) {
         ItemStack itemstack = player.getItemInHand(hand);
@@ -324,6 +298,9 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
             this.setDeltaMovement(vec3.multiply(1.0F, 0.6, 1.0F));
         }
 
+        if (this.horizontalCollision) {
+            this.jumpFromGround();
+        }
     }
 
     @Override
@@ -341,10 +318,11 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         if (remainingLife == 0) {
             this.hurt(damageSources().genericKill(), this.getHealth());
         }
+    }
 
-        if (walkTimer > 0) {
-            walkTimer--;
-        }
+    @Override
+    public double getTick(@Nullable Object object) {
+        return 0;
     }
 
     @Override
@@ -394,15 +372,10 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
     }
 
     @Override
-    protected boolean canGlide() {
-        return true;
-    }
-
-    @Override
     public void setTarget(@javax.annotation.Nullable LivingEntity entity) {
         AttributeInstance attributeinstance = this.getAttribute(Attributes.MOVEMENT_SPEED);
         assert attributeinstance != null;
-        if (entity != null) {
+        if (entity != null && !this.isDecapitated()) {
             super.setTarget(entity);
             this.setSprinting(true);
             if (!attributeinstance.hasModifier(SPEED_MODIFIER_ATTACKING_ID)) {
@@ -422,6 +395,15 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         if (this.hasGoggles()) {
             this.drop(new ItemStack(Items.GLASS), false, false);
         }
+
+        // Natural drops
+        ItemStack feathers = new ItemStack(Items.FEATHER);
+        feathers.setCount(random.nextInt(2, 6));
+        this.drop(feathers, false, false);
+
+        ItemStack chicken = new ItemStack(Items.CHICKEN);
+        feathers.setCount(random.nextInt(1, 3));
+        this.drop(chicken, false, false);
     }
 
     @Override
@@ -491,15 +473,6 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         }
     }
 
-    @Override
-    public boolean isFlying() {
-        return !this.onGround() && !this.isInWater() && this.entityData.get(FLYING);
-    }
-
-    public void setFlying(boolean flying) {
-        this.entityData.set(FLYING, flying);
-    }
-
     public boolean isSleeping() {
         return this.entityData.get(SLEEPING);
     }
@@ -523,6 +496,21 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
 
     boolean isBeingStaredBy(LivingEntity player) {
         return LivingEntity.PLAYER_NOT_WEARING_DISGUISE_ITEM_FOR_TARGET.test(player, this) && this.isLookingAtMe(player, 0.025, true, false, this.getEyeY());
+    }
+
+    public boolean isValidSleepSpot(BlockPos pos) {
+        Level level = this.level();
+
+        if (!level.getBlockState(pos).isAir() ||
+                !level.getBlockState(pos.below()).isSolid() ||
+                !level.getBlockState(pos.above()).isSolid()
+        ) return false;
+
+        return level.noCollision(this, this.getBoundingBox().move(
+                pos.getX() + 0.5 - this.getX(),
+                pos.getY() - this.getY(),
+                pos.getZ() + 0.5 - this.getZ()
+        ));
     }
 
     public boolean hasAirSpace() {
@@ -550,24 +538,14 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         }
     }
 
-    abstract class BasiliskBehaviorGoal extends Goal {
-        Basilisk basilisk;
-        private final TargetingConditions alertableTargeting;
-
-        BasiliskBehaviorGoal() {
-            TargetingConditions var10001 = TargetingConditions.forCombat().range(12.0F);
-            this.basilisk = Basilisk.this;
-            Objects.requireNonNull(basilisk);
-            this.alertableTargeting = var10001.selector(basilisk.PREY_SELECTOR);
+    static class BasiliskPathNavigation extends AmphibiousPathNavigation{
+        public BasiliskPathNavigation(Mob mob, Level level) {
+            super(mob, level);
         }
 
-        protected boolean hasShelter() {
-            BlockPos blockpos = BlockPos.containing(Basilisk.this.getX(), this.basilisk.getBoundingBox().maxY, this.basilisk.getZ());
-            return !this.basilisk.level().canSeeSky(blockpos) && this.basilisk.getWalkTargetValue(blockpos) >= 0.0F;
-        }
-
-        protected boolean alertable() {
-            return !getServerLevel(this.basilisk.level()).getNearbyEntities(LivingEntity.class, alertableTargeting, this.basilisk, this.basilisk.getBoundingBox().inflate(12.0F, 6.0F, 12.0F)).isEmpty();
+        @Override
+        protected boolean canMoveDirectly(@NotNull Vec3 start, @NotNull Vec3 end) {
+            return super.canMoveDirectly(start, end);
         }
     }
 
@@ -581,12 +559,12 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
 
         @Override
         public boolean canUse() {
-            return !this.basilisk.isFlying() && !this.basilisk.isSleeping() && super.canUse();
+            return !this.basilisk.canFollow() && !this.basilisk.isSleeping() && super.canUse();
         }
 
         @Override
         public boolean canContinueToUse() {
-            return !this.basilisk.isFlying() && !this.basilisk.isSleeping() && super.canContinueToUse();
+            return !this.basilisk.canFollow() && !this.basilisk.isSleeping() && super.canContinueToUse();
         }
     }
 
@@ -626,205 +604,60 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         }
     }
 
-    static class BasiliskNodeEvaluator extends AmphibiousNodeEvaluator {
-        private final BlockPos.MutableBlockPos belowPos = new BlockPos.MutableBlockPos();
+    static class BasiliskSleepGoal extends Goal {
+        private final Basilisk basilisk;
+        private BlockPos targetPos;
 
-        public BasiliskNodeEvaluator() {
-            super(true);
-        }
-
-        public @NotNull Node getStart() {
-            return !this.mob.isInWater() ? super.getStart() : this.getStartNode(new BlockPos(Mth.floor(this.mob.getBoundingBox().minX), Mth.floor(this.mob.getBoundingBox().minY), Mth.floor(this.mob.getBoundingBox().minZ)));
-        }
-
-        public @NotNull PathType getPathType(PathfindingContext pathfindingContext, int x, int y, int z) {
-            this.belowPos.set(x, y - 1, z);
-            BlockState blockstate = pathfindingContext.getBlockState(this.belowPos);
-            return blockstate.is(BlockTags.FROG_PREFER_JUMP_TO) ? PathType.OPEN : super.getPathType(pathfindingContext, x, y, z);
-        }
-    }
-
-    static class BasiliskPathNavigation extends AmphibiousPathNavigation {
-        BasiliskPathNavigation(Basilisk mob, Level level) {
-            super(mob, level);
-        }
-
-        public boolean canCutCorner(@NotNull PathType pathType) {
-            return pathType != PathType.WATER_BORDER && super.canCutCorner(pathType);
-        }
-
-        protected @NotNull PathFinder createPathFinder(int maxVisitedNodes) {
-            this.nodeEvaluator = new BasiliskNodeEvaluator();
-            return new PathFinder(this.nodeEvaluator, maxVisitedNodes);
-        }
-    }
-
-    static class SeekShelterGoal extends FleeSunGoal {
-        private int interval = reducedTickDelay(100);
-        Basilisk basilisk;
-
-        public SeekShelterGoal(Basilisk basilisk, double speedModifier) {
-            super(basilisk, speedModifier);
+        public BasiliskSleepGoal(Basilisk basilisk) {
             this.basilisk = basilisk;
-        }
-
-        public boolean canUse() {
-            if (this.basilisk.getTarget() == null &&
-                    !this.basilisk.canFollow() &&
-                    !this.basilisk.isAngry() &&
-                    !this.basilisk.isSleeping()
-            ) {
-                if (this.basilisk.level().isThundering() && this.basilisk.level().canSeeSky(this.mob.blockPosition())) {
-                    return this.setWantedPos();
-                } else if (this.interval > 0) {
-                    --this.interval;
-                    return false;
-                } else {
-                    this.interval = 100;
-                    BlockPos blockpos = this.mob.blockPosition();
-                    return this.basilisk.level().isBrightOutside() && this.basilisk.level().canSeeSky(blockpos) && !((ServerLevel)this.basilisk.level()).isVillage(blockpos) && this.setWantedPos();
-                }
-            } else {
-                return false;
-            }
-        }
-
-        public void start() {
-            super.start();
-        }
-    }
-
-    class SleepGoal extends BasiliskBehaviorGoal {
-        private static final int WAIT_TIME_BEFORE_SLEEP = reducedTickDelay(140);
-        private int countdown;
-        Basilisk basilisk;
-
-        public SleepGoal(Basilisk basilisk) {
-            this.basilisk = basilisk;
-            this.countdown = this.basilisk.random.nextInt(WAIT_TIME_BEFORE_SLEEP);
-            this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.JUMP));
-        }
-
-        public boolean canUse() {
-            if (this.basilisk.getTarget() == null &&
-                    !this.basilisk.canFollow() &&
-                    !this.basilisk.isAngry() &&
-                    !this.basilisk.isSleeping()
-            ) {
-                return this.basilisk.xxa == 0.0F && this.basilisk.yya == 0.0F && this.basilisk.zza == 0.0F && (this.canSleep() || this.basilisk.isSleeping());
-            } else {
-                return false;
-            }
-        }
-
-        public boolean canContinueToUse() {
-            if (this.basilisk.getTarget() == null &&
-                    !this.basilisk.canFollow() &&
-                    !this.basilisk.isAngry() &&
-                    !this.basilisk.isSleeping()
-            ) {
-                return this.canSleep();
-            } else {
-                return false;
-            }
-        }
-
-        private boolean canSleep() {
-            if (this.countdown > 0) {
-                --this.countdown;
-                return false;
-            } else {
-                return this.basilisk.level().isBrightOutside() && this.hasShelter() && !this.alertable() && !this.basilisk.isInPowderSnow;
-            }
-        }
-
-        public void stop() {
-            this.countdown = this.basilisk.random.nextInt(WAIT_TIME_BEFORE_SLEEP);
-            this.basilisk.setOrderedToSit(false);
-            this.basilisk.setSleeping(false);
-        }
-
-        public void start() {
-            this.basilisk.setOrderedToSit(false);
-            this.basilisk.setJumping(false);
-            this.basilisk.setSleeping(true);
-            this.basilisk.getNavigation().stop();
-            this.basilisk.getMoveControl().setWantedPosition(this.basilisk.getX(), this.basilisk.getY(), this.basilisk.getZ(), 0.0F);
-        }
-    }
-
-    static class BasiliskRandomFlyGoal extends WaterAvoidingRandomFlyingGoal {
-        Basilisk basilisk;
-
-        public BasiliskRandomFlyGoal(Basilisk basilisk, double speedMod) {
-            super(basilisk, speedMod);
-            this.basilisk = basilisk;
+            this.setFlags(EnumSet.of(Flag.MOVE));
         }
 
         @Override
         public boolean canUse() {
-            LivingEntity target = this.basilisk.getTarget();
-            if (target != null && this.basilisk.cantReachViaLandOrWater(target)) {
-                return true;
+            if (basilisk.getTarget() != null) return false;
+
+            BlockPos mobPos = basilisk.blockPosition();
+
+            // Scan in a radius around the Basilisk
+            for (BlockPos pos : BlockPos.betweenClosed(mobPos.offset(-8, -2, -8), mobPos.offset(8, 2, 8))) {
+                if (basilisk.isValidSleepSpot(pos)) {
+                    targetPos = pos.immutable();
+                    return true;
+                }
             }
 
-            return this.basilisk.walkTimer == 0 && this.basilisk.hasAirSpace() && super.canUse();
+            return false;
         }
 
         @Override
         public boolean canContinueToUse() {
-            LivingEntity target = this.basilisk.getTarget();
-            if (target != null && this.basilisk.cantReachViaLandOrWater(target)) {
-                return true;
-            }
-
-            return !this.basilisk.onGround() && !this.basilisk.isInWater() && super.canContinueToUse();
+            return !basilisk.canFollow() && targetPos != null && basilisk.distanceToSqr(Vec3.atCenterOf(targetPos)) > 1.0D;
         }
 
         @Override
         public void start() {
-            super.start();
-            this.basilisk.setFlying(true);
+            if (targetPos != null) {
+                basilisk.getNavigation().moveTo(
+                        targetPos.getX() + 0.5,
+                        targetPos.getY(),
+                        targetPos.getZ() + 0.5,
+                        1.0
+                );
+            }
+        }
+
+        @Override
+        public void tick() {
+            if (targetPos != null && basilisk.distanceToSqr(Vec3.atCenterOf(targetPos)) < 1.5D) {
+                basilisk.setSleeping(true);
+            }
         }
 
         @Override
         public void stop() {
-            this.basilisk.walkTimer = 300 + this.basilisk.random.nextInt(1200);
-            this.basilisk.setFlying(false);
-            super.stop();
-        }
-
-        @javax.annotation.Nullable
-        protected Vec3 getPosition() {
-            Vec3 vec3 = null;
-            if (this.mob.isInWater()) {
-                vec3 = LandRandomPos.getPos(this.mob, 15, 15);
-            }
-
-            if (this.mob.getRandom().nextFloat() >= this.probability) {
-                vec3 = this.getTreePos();
-            }
-
-            return vec3 == null ? super.getPosition() : vec3;
-        }
-
-        @javax.annotation.Nullable
-        private Vec3 getTreePos() {
-            BlockPos blockpos = this.mob.blockPosition();
-            BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
-            BlockPos.MutableBlockPos blockpos$mutableblockpos1 = new BlockPos.MutableBlockPos();
-
-            for(BlockPos blockpos1 : BlockPos.betweenClosed(Mth.floor(this.mob.getX() - (double)3.0F), Mth.floor(this.mob.getY() - (double)6.0F), Mth.floor(this.mob.getZ() - (double)3.0F), Mth.floor(this.mob.getX() + (double)3.0F), Mth.floor(this.mob.getY() + (double)6.0F), Mth.floor(this.mob.getZ() + (double)3.0F))) {
-                if (!blockpos.equals(blockpos1)) {
-                    BlockState blockstate = this.mob.level().getBlockState(blockpos$mutableblockpos1.setWithOffset(blockpos1, Direction.DOWN));
-                    boolean flag = blockstate.getBlock() instanceof LeavesBlock || blockstate.is(BlockTags.LOGS);
-                    if (flag && this.mob.level().isEmptyBlock(blockpos1) && this.mob.level().isEmptyBlock(blockpos$mutableblockpos.setWithOffset(blockpos1, Direction.UP))) {
-                        return Vec3.atBottomCenterOf(blockpos1);
-                    }
-                }
-            }
-
-            return null;
+            basilisk.setSleeping(false);
+            targetPos = null;
         }
     }
 }

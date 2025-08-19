@@ -66,9 +66,6 @@ public class FollowWanderSitAnimal extends TamableAnimal {
             this.startDistance = startDistance;
             this.stopDistance = stopDistance;
             this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
-            if (!(tamable.getNavigation() instanceof GroundPathNavigation) && !(tamable.getNavigation() instanceof FlyingPathNavigation)) {
-                throw new IllegalArgumentException("Unsupported mob type for FollowOwnerGoal");
-            }
         }
 
         public boolean canUse() {
