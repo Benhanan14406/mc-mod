@@ -6,6 +6,7 @@ import com.Benhanan14406.dragon.client.renderer.chimaera.ChimaeraGoatRenderer;
 import com.Benhanan14406.dragon.client.renderer.chimaera.ChimaeraLionRenderer;
 import com.Benhanan14406.dragon.client.renderer.chimaera.ChimaeraSnakeRenderer;
 import com.Benhanan14406.dragon.client.renderer.misc.FireCloudRenderer;
+import com.Benhanan14406.dragon.datagen.ModDatapackProvider;
 import com.Benhanan14406.dragon.entities.Basilisk;
 import com.Benhanan14406.dragon.entities.chimaera.ChimaeraGoat;
 import com.Benhanan14406.dragon.entities.chimaera.ChimaeraLion;
@@ -14,6 +15,9 @@ import com.Benhanan14406.dragon.entities.misc.ChimaeraFireBreath;
 import com.Benhanan14406.dragon.entities.misc.FireCloud;
 import com.Benhanan14406.dragon.events.BasiliskSpawnEvent;
 import net.minecraft.client.renderer.entity.EntityRenderers;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.data.DataGenerator;
+import net.minecraft.data.PackOutput;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
@@ -23,6 +27,7 @@ import net.minecraft.world.entity.SpawnPlacementTypes;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import org.slf4j.Logger;
@@ -50,6 +55,8 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
+import java.util.concurrent.CompletableFuture;
+
 // The value here should match an entry in the META-INF/neoforge.mods.toml file
 @Mod(BensBeastiary.MODID)
 public class BensBeastiary {
@@ -65,27 +72,33 @@ public class BensBeastiary {
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(BuiltInRegistries.ENTITY_TYPE, MODID);;
     // Chimaera Lion
     public static ResourceKey<EntityType<?>> CHIMAERA_LION_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("chimaera_lion"));
-    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraLion>> CHIMAERA_LION = ENTITIES.register("chimaera_lion", () -> EntityType.Builder.of(ChimaeraLion::new, MobCategory.MONSTER).fireImmune().sized(1.25f, 1.25f).build(CHIMAERA_LION_KEY));
+    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraLion>> CHIMAERA_LION = ENTITIES.register("chimaera_lion",
+            () -> EntityType.Builder.of(ChimaeraLion::new, MobCategory.MONSTER).fireImmune().sized(1.25f, 1.25f).build(CHIMAERA_LION_KEY));
 
     // Chimaera Goat
     public static ResourceKey<EntityType<?>> CHIMAERA_GOAT_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("chimaera_goat"));
-    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraGoat>> CHIMAERA_GOAT = ENTITIES.register("chimaera_goat", () -> EntityType.Builder.of(ChimaeraGoat::new, MobCategory.MONSTER).fireImmune().sized(0.75f, 1f).build(CHIMAERA_GOAT_KEY));
+    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraGoat>> CHIMAERA_GOAT = ENTITIES.register("chimaera_goat",
+            () -> EntityType.Builder.of(ChimaeraGoat::new, MobCategory.MONSTER).fireImmune().sized(0.75f, 1f).build(CHIMAERA_GOAT_KEY));
 
     // Chimaera Snake
     public static ResourceKey<EntityType<?>> CHIMAERA_SNAKE_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("chimaera_snake"));
-    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraSnake>> CHIMAERA_SNAKE = ENTITIES.register("chimaera_snake", () -> EntityType.Builder.of(ChimaeraSnake::new, MobCategory.MONSTER).fireImmune().sized(1f, 1f).build(CHIMAERA_SNAKE_KEY));
+    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraSnake>> CHIMAERA_SNAKE = ENTITIES.register("chimaera_snake",
+            () -> EntityType.Builder.of(ChimaeraSnake::new, MobCategory.MONSTER).fireImmune().sized(1f, 1f).build(CHIMAERA_SNAKE_KEY));
 
     // Basilisk
     public static ResourceKey<EntityType<?>> BASILISK_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("basilisk"));
-    public static final DeferredHolder<EntityType<?>, EntityType<Basilisk>> BASILISK = ENTITIES.register("basilisk", () -> EntityType.Builder.of(Basilisk::new, MobCategory.CREATURE).fireImmune().sized(1f, 1f).build(BASILISK_KEY));
+    public static final DeferredHolder<EntityType<?>, EntityType<Basilisk>> BASILISK = ENTITIES.register("basilisk",
+            () -> EntityType.Builder.of(Basilisk::new, MobCategory.CREATURE).sized(1f, 1f).build(BASILISK_KEY));
 
     // Fire Breath effect
     public static ResourceKey<EntityType<?>> FIRE_BREATH_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("fire_breath"));
-    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraFireBreath>> FIRE_BREATH = ENTITIES.register("fire_breath", () -> EntityType.Builder.<ChimaeraFireBreath>of(ChimaeraFireBreath::new, MobCategory.MISC).noLootTable().fireImmune().sized(1.0F, 1.0F).clientTrackingRange(4).updateInterval(10).build(FIRE_BREATH_KEY));
+    public static final DeferredHolder<EntityType<?>, EntityType<ChimaeraFireBreath>> FIRE_BREATH = ENTITIES.register("fire_breath",
+            () -> EntityType.Builder.<ChimaeraFireBreath>of(ChimaeraFireBreath::new, MobCategory.MISC).noLootTable().fireImmune().sized(1.0F, 1.0F).clientTrackingRange(4).updateInterval(10).build(FIRE_BREATH_KEY));
 
     // Fire Cloud effect
     public static ResourceKey<EntityType<?>> FIRE_CLOUD_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("fire_cloud"));
-    public static final DeferredHolder<EntityType<?>, EntityType<FireCloud>> FIRE_CLOUD = ENTITIES.register("fire_cloud", () -> EntityType.Builder.<FireCloud>of(FireCloud::new, MobCategory.MISC).noLootTable().fireImmune().sized(6.0F, 0.5F).clientTrackingRange(10).updateInterval(Integer.MAX_VALUE).build(FIRE_CLOUD_KEY));
+    public static final DeferredHolder<EntityType<?>, EntityType<FireCloud>> FIRE_CLOUD = ENTITIES.register("fire_cloud",
+            () -> EntityType.Builder.<FireCloud>of(FireCloud::new, MobCategory.MISC).noLootTable().fireImmune().sized(6.0F, 0.5F).clientTrackingRange(10).updateInterval(Integer.MAX_VALUE).build(FIRE_CLOUD_KEY));
 
 
     /// Block registry
@@ -97,13 +110,16 @@ public class BensBeastiary {
 //    public static final DeferredItem<BlockItem> EXAMPLE_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("example_block", EXAMPLE_BLOCK);
 
     // Basilisk Spawn Egg
-    public static final DeferredItem<SpawnEggItem> BASILISK_SPAWN_EGG = ITEMS.registerItem("basilisk_spawn_egg", props -> new SpawnEggItem(BASILISK.get(), props));
+    public static final DeferredItem<SpawnEggItem> BASILISK_SPAWN_EGG = ITEMS.registerItem("basilisk_spawn_egg",
+            props -> new SpawnEggItem(BASILISK.get(), props));
 
     // Basilisk Blood
-    public static final DeferredItem<Item> BASILISK_BLOOD = ITEMS.registerSimpleItem("basilisk_blood", new Item.Properties());
+    public static final DeferredItem<Item> BASILISK_BLOOD = ITEMS.registerSimpleItem("basilisk_blood",
+            new Item.Properties());
 
     // Goggles
-    public static final DeferredItem<Item> GOGGLES = ITEMS.registerSimpleItem("goggles", new Item.Properties().equippable(EquipmentSlot.HEAD));
+    public static final DeferredItem<Item> GOGGLES = ITEMS.registerSimpleItem("goggles",
+            new Item.Properties().equippable(EquipmentSlot.HEAD));
 
 
     // Creates a creative tab with the id "examplemod:example_tab" for the example item, that is placed after the combat tab
@@ -200,14 +216,26 @@ public class BensBeastiary {
 
         @SubscribeEvent
         public static void registerSpawnPlacements(RegisterSpawnPlacementsEvent event) {
-            event.register(CHIMAERA_LION.get(), SpawnPlacementTypes.ON_GROUND, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    Animal::checkAnimalSpawnRules, RegisterSpawnPlacementsEvent.Operation.REPLACE);
-            event.register(CHIMAERA_GOAT.get(), SpawnPlacementTypes.ON_GROUND, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    Animal::checkAnimalSpawnRules, RegisterSpawnPlacementsEvent.Operation.REPLACE);
-            event.register(CHIMAERA_SNAKE.get(), SpawnPlacementTypes.ON_GROUND, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    Animal::checkAnimalSpawnRules, RegisterSpawnPlacementsEvent.Operation.REPLACE);
-            event.register(BASILISK.get(), SpawnPlacementTypes.ON_GROUND, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    Animal::checkAnimalSpawnRules, RegisterSpawnPlacementsEvent.Operation.REPLACE);
+            event.register(CHIMAERA_LION.get(),
+                    SpawnPlacementTypes.ON_GROUND,
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Animal::checkAnimalSpawnRules,
+                    RegisterSpawnPlacementsEvent.Operation.REPLACE);
+            event.register(CHIMAERA_GOAT.get(),
+                    SpawnPlacementTypes.ON_GROUND,
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Animal::checkAnimalSpawnRules,
+                    RegisterSpawnPlacementsEvent.Operation.REPLACE);
+            event.register(CHIMAERA_SNAKE.get(),
+                    SpawnPlacementTypes.ON_GROUND,
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Animal::checkAnimalSpawnRules,
+                    RegisterSpawnPlacementsEvent.Operation.REPLACE);
+            event.register(BASILISK.get(),
+                    SpawnPlacementTypes.ON_GROUND,
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Animal::checkAnimalSpawnRules,
+                    RegisterSpawnPlacementsEvent.Operation.REPLACE);
         }
     }
 }

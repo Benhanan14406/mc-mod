@@ -3,6 +3,7 @@ package com.Benhanan14406.dragon.entities;
 import com.Benhanan14406.dragon.BensBeastiary;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -11,11 +12,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.util.TimeUtil;
 import net.minecraft.util.valueproviders.UniformInt;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -36,10 +40,14 @@ import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.FlyingAnimal;
-import net.minecraft.world.entity.animal.frog.Tadpole;
+import net.minecraft.world.entity.animal.PolarBear;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -91,31 +99,30 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
 
     public final TargetingConditions.Selector PREY_SELECTOR = (entity, serverLevel) -> {
         EntityType<?> entitytype = entity.getType();
-        boolean canTarget;
+        boolean validTarget;
         if (entity.isBaby()) {
-            canTarget = true;
+            validTarget = true;
         } else {
-            if (entity instanceof TamableAnimal && ((TamableAnimal) entity).getOwner() == this.getOwner()) {
-                canTarget = false;
-            } else if (entity instanceof Basilisk) {
-                canTarget = false;
+            if (entitytype == BensBeastiary.BASILISK.get()) {
+                validTarget = false;
             } else {
-                canTarget = entitytype == EntityType.CHICKEN
-                        || entitytype == EntityType.RABBIT
-                        || entitytype == EntityType.TADPOLE
-                        || entitytype == EntityType.FROG
-                        || entitytype == EntityType.BEE
-                        || entitytype == EntityType.ARMADILLO
-                        || entitytype == EntityType.PARROT
-                        || entitytype == EntityType.SILVERFISH
-                        || entitytype == EntityType.CAT
-                        || entitytype == EntityType.OCELOT
-                        || entitytype == EntityType.BAT
-                        || entitytype == EntityType.AXOLOTL
-                        || entitytype == EntityType.CAVE_SPIDER;
+                validTarget =
+                        entitytype == EntityType.CHICKEN ||
+                        entitytype == EntityType.RABBIT ||
+                        entitytype == EntityType.TADPOLE ||
+                        entitytype == EntityType.FROG ||
+                        entitytype == EntityType.BEE ||
+                        entitytype == EntityType.ARMADILLO ||
+                        entitytype == EntityType.PARROT ||
+                        entitytype == EntityType.SILVERFISH ||
+                        entitytype == EntityType.OCELOT ||
+                        entitytype == EntityType.FOX ||
+                        entitytype == EntityType.BAT ||
+                        entitytype == EntityType.AXOLOTL ||
+                        entitytype == EntityType.CAVE_SPIDER;
             }
         }
-        return !this.canFollow() && !this.isDecapitated() && !this.isSleeping() && canTarget;
+        return !this.canFollow() && !this.isDecapitated() && !this.isSleeping() && validTarget;
     };
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
@@ -136,23 +143,29 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
                 .add(Attributes.MAX_HEALTH, 10.0F)
                 .add(Attributes.MOVEMENT_SPEED, 0.19F)
                 .add(Attributes.FLYING_SPEED, 0.5F)
-                .add(Attributes.ATTACK_DAMAGE, 4.0F);
+                .add(Attributes.ATTACK_DAMAGE, 4.0F)
+                .add(Attributes.FOLLOW_RANGE, 20.0F);
+    }
+
+    @Override
+    public @NotNull SpawnGroupData finalizeSpawn(@NotNull ServerLevelAccessor level, @NotNull DifficultyInstance difficulty, @NotNull EntitySpawnReason spawnType, @Nullable SpawnGroupData spawnGroupData) {
+        return super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData);
     }
 
     protected void registerGoals() {
         this.goalSelector.addGoal(1, new ToggleableFollowOwnerGoal(this, 1.0F, 10.0F, 2.0F));
         this.goalSelector.addGoal(2, new FreezeWhenLookedAt(this));
-        this.goalSelector.addGoal(2, new BasiliskRandomFlyGoal(this, 1.0F));
         this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0F, true));
         this.goalSelector.addGoal(6, new SeekShelterGoal(this, 1.0F));
         this.goalSelector.addGoal(7, new SleepGoal(this));
+        this.goalSelector.addGoal(8, new BasiliskRandomFlyGoal(this, 1.0F));
         this.goalSelector.addGoal(8, new BasiliskRandomStrollGoal(this, 1.0F));
         this.goalSelector.addGoal(9, new LookAtPlayerGoal(this, Player.class, 15.0F));
         this.goalSelector.addGoal(10, new RandomLookAroundGoal(this));
         this.targetSelector.addGoal(1, new OwnerHurtByTargetGoal(this));
         this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
-        this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 10, false, false, (livingEntity, serverLevel) -> !this.canFollow() && !this.isDecapitated() && this.isAngryAt(livingEntity, serverLevel)));
-        this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, Animal.class, false, PREY_SELECTOR));
+        this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 10, false, false, this::isAngryAt));
+        this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 60 + random.nextInt(41), false, true, PREY_SELECTOR));
         this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, true));
 
     }
@@ -286,10 +299,6 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
     public void aiStep() {
         super.aiStep();
 
-        if (!this.level().isClientSide) {
-            this.updatePersistentAnger((ServerLevel)this.level(), true);
-        }
-
         List<LivingEntity> nearbyEntities = this.level().getEntitiesOfClass(LivingEntity.class, this.getBoundingBox().inflate(10.0F));
 
         // Agro and petrify on being stared
@@ -321,11 +330,16 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
         if (!this.onGround() && vec3.y < (double)0.0F) {
             this.setDeltaMovement(vec3.multiply(1.0F, 0.6, 1.0F));
         }
+
     }
 
     @Override
     public void tick() {
         super.tick();
+
+        if (!this.level().isClientSide) {
+            this.updatePersistentAnger((ServerLevel)this.level(), true);
+        }
 
         if (this.isDecapitated()) {
             remainingLife--;
@@ -355,12 +369,12 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, Flyin
 
     @Override
     protected void playStepSound(@NotNull BlockPos pos, @NotNull BlockState blockIn) {
-        this.playSound(SoundEvents.FROG_STEP, 0.5F, 1.0F);
+        this.playSound(SoundEvents.STRIDER_STEP, 0.75F, 1.0F);
     }
 
     @Override
     protected void playAttackSound() {
-        this.playSound(SoundEvents.EVOKER_FANGS_ATTACK, 0.1F, 1.0F);
+        this.playSound(SoundEvents.PHANTOM_BITE, 0.1F, 0.5F);
     }
 
     @Override

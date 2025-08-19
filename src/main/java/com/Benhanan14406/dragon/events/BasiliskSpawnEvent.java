@@ -2,6 +2,7 @@ package com.Benhanan14406.dragon.events;
 
 import com.Benhanan14406.dragon.BensBeastiary;
 import com.Benhanan14406.dragon.entities.Basilisk;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.animal.frog.Frog;
@@ -28,7 +29,8 @@ public class BasiliskSpawnEvent {
                 if (basilisk != null) {
                     basilisk.snapTo(frog.blockPosition().getCenter(), level.random.nextFloat() * 360F, 0F);
                     level.addFreshEntity(basilisk);
-
+                    basilisk.level().addParticle(ParticleTypes.EGG_CRACK, frog.blockPosition().getCenter().x, frog.blockPosition().getCenter().y, frog.blockPosition().getCenter().z, 1.0F, 1.0F, 1.0F);
+                    basilisk.level().addParticle(ParticleTypes.MYCELIUM, frog.blockPosition().getCenter().x, frog.blockPosition().getCenter().y, frog.blockPosition().getCenter().z, 1.0F, 1.0F, 1.0F);
                     basilisk.setBaby(true);
 
                     // Imprint to nearest player
