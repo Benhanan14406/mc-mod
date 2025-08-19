@@ -6,7 +6,6 @@ import com.Benhanan14406.dragon.client.renderer.chimaera.ChimaeraGoatRenderer;
 import com.Benhanan14406.dragon.client.renderer.chimaera.ChimaeraLionRenderer;
 import com.Benhanan14406.dragon.client.renderer.chimaera.ChimaeraSnakeRenderer;
 import com.Benhanan14406.dragon.client.renderer.misc.FireCloudRenderer;
-import com.Benhanan14406.dragon.datagen.ModDatapackProvider;
 import com.Benhanan14406.dragon.entities.Basilisk;
 import com.Benhanan14406.dragon.entities.chimaera.ChimaeraGoat;
 import com.Benhanan14406.dragon.entities.chimaera.ChimaeraLion;
@@ -15,9 +14,6 @@ import com.Benhanan14406.dragon.entities.misc.ChimaeraFireBreath;
 import com.Benhanan14406.dragon.entities.misc.FireCloud;
 import com.Benhanan14406.dragon.events.BasiliskSpawnEvent;
 import net.minecraft.client.renderer.entity.EntityRenderers;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.data.DataGenerator;
-import net.minecraft.data.PackOutput;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
@@ -27,7 +23,6 @@ import net.minecraft.world.entity.SpawnPlacementTypes;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import org.slf4j.Logger;
@@ -54,8 +49,6 @@ import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
-
-import java.util.concurrent.CompletableFuture;
 
 // The value here should match an entry in the META-INF/neoforge.mods.toml file
 @Mod(BensBeastiary.MODID)
