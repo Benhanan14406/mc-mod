@@ -1,5 +1,6 @@
 package com.Benhanan14406.dragon.entities;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -9,22 +10,26 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
-import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
 
 public class FollowWanderSitAnimal extends TamableAnimal {
-    private static final EntityDataAccessor<Boolean> FOLLOW_MODE = SynchedEntityData.defineId(FollowWanderSitAnimal.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> FOLLOW = SynchedEntityData.defineId(FollowWanderSitAnimal.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> SIT = SynchedEntityData.defineId(FollowWanderSitAnimal.class, EntityDataSerializers.BOOLEAN);
+    int mode;
 
     protected FollowWanderSitAnimal(EntityType<? extends TamableAnimal> entityType, Level level) {
         super(entityType, level);
+        this.mode = 3;
     }
 
     public boolean isFood(@NotNull ItemStack itemStack) {
@@ -37,18 +42,77 @@ public class FollowWanderSitAnimal extends TamableAnimal {
 
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         super.defineSynchedData(builder);
-        builder.define(FOLLOW_MODE, false);
+        builder.define(FOLLOW, false);
+        builder.define(SIT, false);
     }
 
-    public boolean canFollow() {
-        return this.entityData.get(FOLLOW_MODE);
+    @Override
+    protected void addAdditionalSaveData(@NotNull ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        output.putBoolean("isFollowing", this.isFollowing());
+        output.putBoolean("isSitting", this.isSitting());
     }
 
-    public void setCanFollow(boolean follow) {
-        this.entityData.set(FOLLOW_MODE, follow);
+    @Override
+    protected void readAdditionalSaveData(@NotNull ValueInput input) {
+        super.readAdditionalSaveData(input);
+        this.setFollow(input.getBooleanOr("isFollowing", this.isFollowing()));
+        this.setSit(input.getBooleanOr("isSitting", this.isSitting()));
     }
 
-    static  class ToggleableFollowOwnerGoal extends Goal {
+    public boolean isFollowing() {
+        return this.entityData.get(FOLLOW);
+    }
+
+    public void setFollow(boolean follow) {
+        this.entityData.set(FOLLOW, follow);
+    }
+
+    public boolean isSitting() {
+        return this.entityData.get(SIT);
+    }
+
+    public void setSit(boolean sit) {
+        this.entityData.set(SIT, sit);
+    }
+
+    public void cycleMode(Player player) {
+        if (mode == 3) {
+            mode = 1;
+        } else {
+            mode += 1;
+        }
+
+        switch(mode) {
+            case(1) -> {
+                this.setFollow(true);
+                this.setSit(false);
+            }
+            case(2) -> {
+                this.setFollow(false);
+                this.setSit(true);
+            }
+            case(3) -> {
+                this.setFollow(false);
+                this.setSit(false);
+            }
+        }
+
+        this.getDisplayName();
+        if (this.isFollowing() && !this.isSitting()) {
+            player.displayClientMessage(Component.literal(this.getDisplayName().getString() + " is following"), true);
+        } else if (!this.isFollowing() && this.isSitting()) {
+            player.displayClientMessage(Component.literal(this.getDisplayName().getString() + " is sitting"), true);
+        } else if (!this.isFollowing() && !this.isSitting()) {
+            player.displayClientMessage(Component.literal(this.getDisplayName().getString() + " is wandering"), true);
+        } else {
+            this.setFollow(true);
+            this.setSit(false);
+            player.displayClientMessage(Component.literal(this.getDisplayName().getString() + " is following"), true);
+        }
+    }
+
+    public static  class ToggleableFollowOwnerGoal extends Goal {
         private final FollowWanderSitAnimal tamable;
         @javax.annotation.Nullable
         private LivingEntity owner;
@@ -57,7 +121,6 @@ public class FollowWanderSitAnimal extends TamableAnimal {
         private int timeToRecalcPath;
         private final float stopDistance;
         private final float startDistance;
-        private float oldWaterCost;
 
         public ToggleableFollowOwnerGoal(FollowWanderSitAnimal tamable, double speedModifier, float startDistance, float stopDistance) {
             this.tamable = tamable;
@@ -74,34 +137,38 @@ public class FollowWanderSitAnimal extends TamableAnimal {
                 return false;
             } else if (this.tamable.unableToMoveToOwner()) {
                 return false;
+            } else if (this.tamable.isSitting()) {
+                return false;
             } else if (this.tamable.distanceToSqr(livingentity) < (double)(this.startDistance * this.startDistance)) {
                 return false;
             } else {
                 this.owner = livingentity;
-                return this.tamable.canFollow();
+                return this.tamable.isFollowing();
             }
         }
 
         public boolean canContinueToUse() {
-            if (this.navigation.isDone() || !this.tamable.canFollow()) {
+            if (this.navigation.isDone() || !this.tamable.isFollowing() || this.tamable.isSitting()) {
                 return false;
             } else {
                 if (this.tamable.unableToMoveToOwner()) return false;
-                assert this.owner != null;
-                return !(this.tamable.distanceToSqr(this.owner) <= (double) (this.stopDistance * this.stopDistance));
+                if (this.owner != null) {
+                    return !(this.tamable.distanceToSqr(this.owner) <= (double) (this.stopDistance * this.stopDistance));
+                } else {
+                    return false;
+                }
             }
         }
 
         public void start() {
             this.timeToRecalcPath = 0;
-            this.oldWaterCost = this.tamable.getPathfindingMalus(PathType.WATER);
-            this.tamable.setPathfindingMalus(PathType.WATER, 0.0F);
+            if (this.owner != null) {
+                this.tamable.getNavigation().moveTo(this.owner, this.speedModifier);
+            }
         }
 
         public void stop() {
-            this.owner = null;
             this.navigation.stop();
-            this.tamable.setPathfindingMalus(PathType.WATER, this.oldWaterCost);
         }
 
         public void tick() {
@@ -112,7 +179,7 @@ public class FollowWanderSitAnimal extends TamableAnimal {
             }
 
             if (--this.timeToRecalcPath <= 0) {
-                this.timeToRecalcPath = this.adjustedTickDelay(10);
+                this.timeToRecalcPath = this.adjustedTickDelay(5);
                 if (flag) {
                     this.tamable.tryToTeleportToOwner();
                 } else {

@@ -1,7 +1,7 @@
 package com.Benhanan14406.dragon.client.models;
 
 import com.Benhanan14406.dragon.BensBeastiary;
-import com.Benhanan14406.dragon.entities.Basilisk;
+import com.Benhanan14406.dragon.entities.basilisk.Basilisk;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -13,9 +13,9 @@ import software.bernie.geckolib.model.DefaultedEntityGeoModel;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
 
 public class BasiliskModel extends DefaultedEntityGeoModel<Basilisk> {
-    ResourceLocation NORMAL = ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "geckolib/textures/entity/basilisk.png");
-    ResourceLocation HAS_GOGGLES = ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "geckolib/textures/entity/basilisk_has_goggles.png");
-    ResourceLocation DECAPITATED = ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "geckolib/textures/entity/basilisk_decapitated.png");
+    ResourceLocation NORMAL = ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "geckolib/textures/entity/basilisk/basilisk.png");
+    ResourceLocation HAS_GOGGLES = ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "geckolib/textures/entity/basilisk/basilisk_has_goggles.png");
+    ResourceLocation DECAPITATED = ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "geckolib/textures/entity/basilisk/basilisk_decapitated.png");
 
     public BasiliskModel() {
         super(ResourceLocation.fromNamespaceAndPath(BensBeastiary.MODID, "basilisk"), false);
@@ -27,6 +27,7 @@ public class BasiliskModel extends DefaultedEntityGeoModel<Basilisk> {
 
         renderState.addGeckolibData(DataTickets.SPRINTING, animatable.isDecapitated());
         renderState.addGeckolibData(DataTickets.IS_CROUCHING, animatable.hasGoggles());
+        renderState.addGeckolibData(DataTickets.MAX_DURABILITY, animatable.getBasiliskType());
     }
 
     @Override

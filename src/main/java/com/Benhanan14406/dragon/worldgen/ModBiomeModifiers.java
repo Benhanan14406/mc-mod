@@ -65,7 +65,6 @@ public class ModBiomeModifiers {
 
         context.register(BASILISK_SPAWNS, new BiomeModifiers.AddSpawnsBiomeModifier(
                 HolderSet.direct(
-                        biomes.getOrThrow(Biomes.SWAMP),
                         biomes.getOrThrow(Biomes.FOREST),
                         biomes.getOrThrow(Biomes.FLOWER_FOREST),
                         biomes.getOrThrow(Biomes.BIRCH_FOREST),
