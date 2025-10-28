@@ -2,7 +2,6 @@ package com.Benhanan14406.dragon.entities.basilisk;
 
 import com.Benhanan14406.dragon.BensBeastiary;
 import com.Benhanan14406.dragon.entities.FollowWanderSitAnimal;
-import com.Benhanan14406.dragon.entities.ai.goal.CustomMeleeAttackGoal;
 import com.Benhanan14406.dragon.entities.ai.goal.EatDroppedItemGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -27,24 +26,26 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.*;
 import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
-import net.minecraft.world.entity.ai.targeting.TargetingConditions;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.Chicken;
+import net.minecraft.world.entity.animal.axolotl.Axolotl;
+import net.minecraft.world.entity.animal.frog.Tadpole;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.fluids.FluidType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoAnimatable;
@@ -68,11 +69,12 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
     private static final EntityDataAccessor<Integer> DATA_REMAINING_ANGER_TIME = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_REMAINING_SLEEP_TIME = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_REMAINING_SLEEP_COOLDOWN = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.INT);
-    private static final EntityDataAccessor<Integer> BASILISK_TYPE = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> TYPE = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DECAPITATED = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> HAS_GOGGLES = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> SLEEPING = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> VOCALIZING = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> FLYING = SynchedEntityData.defineId(Basilisk.class, EntityDataSerializers.BOOLEAN);
 
     private static final UniformInt PERSISTENT_ANGER_TIME = TimeUtil.rangeOfSeconds(20, 39);
     private static final UniformInt SLEEP_TIME = TimeUtil.rangeOfSeconds(20, 60);
@@ -92,25 +94,14 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
     protected static final RawAnimation BITE_UNDERWATER = RawAnimation.begin().thenPlay("bite_underwater");
     protected static final RawAnimation VOCALIZE = RawAnimation.begin().thenPlay("vocalize");
 
-    public final TargetingConditions.Selector PREY_SELECTOR = (entity, serverLevel) -> {
-        EntityType<?> entityType = entity.getType();
-        AABB entityBB = entity.getBoundingBox();
-        boolean validTarget;
-        if (entity.isBaby()) {
-            validTarget = true;
-        } else if (entity instanceof TamableAnimal && Objects.equals(((TamableAnimal) entity).getOwner(), this.getOwner())) {
-            validTarget = false;
-        } else validTarget = entityBB.getXsize() <= 1 && entityBB.getYsize() <= 1 && entityType != BensBeastiary.BASILISK.get() && entityType != BensBeastiary.BASILISK_CHICK.get();
-
-        return !this.isFollowing() && !this.isSitting() && !this.isDecapitated() && !this.isSleeping() && validTarget;
-    };
-
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
     public Basilisk(EntityType<? extends TamableAnimal> entityType, Level level) {
         super(entityType, level);
         this.navigation = new BasiliskPathNavigation(this, level());
-        this.moveControl = new SmoothSwimmingMoveControl(this, 75, 45, 1.5F, 1.0F, true);
+        this.setPathfindingMalus(PathType.WATER, 4.0F);
+        this.setPathfindingMalus(PathType.TRAPDOOR, -1.0F);
+        this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true);
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -124,6 +115,11 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
 
     @Override
     public @NotNull SpawnGroupData finalizeSpawn(@NotNull ServerLevelAccessor level, @NotNull DifficultyInstance difficulty, @NotNull EntitySpawnReason spawnType, @Nullable SpawnGroupData spawnGroupData) {
+        float biomeTemp = this.level().getBiome(this.blockPosition()).value().getBaseTemperature();
+        if (biomeTemp <= 0.3) this.setBasiliskType(3);
+        else if (biomeTemp >= 0.95) this.setBasiliskType(2);
+        else this.setBasiliskType(1);
+
         return super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData);
     }
 
@@ -137,21 +133,18 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
         this.goalSelector.addGoal(2, new SitWhenOrderedToGoal(this));
         this.goalSelector.addGoal(3, new FreezeWhenLookedAt(this));
         this.goalSelector.addGoal(5, new ToggleableFollowOwnerGoal(this, 1.0F, 10.0F, 2.0F));
-//        this.goalSelector.addGoal(6, new BasiliskSleepGoal(this));
+        this.goalSelector.addGoal(6, new BasiliskSleepGoal(this));
         this.goalSelector.addGoal(7, new EatDroppedItemGoal(this));
         this.goalSelector.addGoal(8, new BasiliskRandomStrollGoal(this, 1.0F, this.random.nextInt(30, 61)));
         this.goalSelector.addGoal(9, new BasiliskLookAtPlayerGoal(this, Player.class, 20.0F));
         this.goalSelector.addGoal(10, new BasiliskLookAroundGoal(this));
-        this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, true));
+        this.goalSelector.addGoal(9, new BasiliskMeleeAttackGoal(this, 1.0F, false));
 
-        if (!this.isFollowing() && !this.isSitting() && !this.isDecapitated()) {
-            this.goalSelector.addGoal(4, new CustomMeleeAttackGoal(this, 1.0F, true));
-            this.targetSelector.addGoal(1, new OwnerHurtByTargetGoal(this));
-            this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
-            this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 10, false, false, this::isAngryAt));
-            this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 60 + random.nextInt(41), false, true, PREY_SELECTOR));
-
-        }
+        this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, false));
+        this.targetSelector.addGoal(1, new OwnerHurtByTargetGoal(this));
+        this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
+        this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 10, true, false, this::isAngryAt));
+        this.targetSelector.addGoal(5, new BasiliskHuntGoal(this));
 
     }
 
@@ -160,27 +153,32 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
         builder.define(DATA_REMAINING_ANGER_TIME, 0);
         builder.define(DATA_REMAINING_SLEEP_TIME, 0);
         builder.define(DATA_REMAINING_SLEEP_COOLDOWN, 0);
-        builder.define(BASILISK_TYPE, 0);
+        builder.define(TYPE, 1);
         builder.define(DECAPITATED, false);
         builder.define(HAS_GOGGLES, false);
         builder.define(SLEEPING, false);
         builder.define(VOCALIZING, false);
+        builder.define(FLYING, false);
     }
 
     protected void addAdditionalSaveData(@NotNull ValueOutput valueOutput) {
         super.addAdditionalSaveData(valueOutput);
         this.addPersistentAngerSaveData(valueOutput);
+        valueOutput.putInt("BasiliskType", this.getBasiliskType());
     }
 
     protected void readAdditionalSaveData(@NotNull ValueInput valueInput) {
         super.readAdditionalSaveData(valueInput);
         this.readPersistentAngerSaveData(this.level(), valueInput);
+        if (valueInput.getInt("BasiliskType").isPresent()) {
+            this.setBasiliskType(valueInput.getInt("BasiliskType").orElse(1));
+        }
     }
 
     @Override
     public void registerControllers(final AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>("movementPredicate", 10, this::movementPredicate));
-        controllers.add(new AnimationController<>("randomPredicate", 3, this::randomPredicate));
+        controllers.add(new AnimationController<>("randomPredicate", 5, this::randomPredicate));
         controllers.add(new AnimationController<>("swingPredicate", 3, this::swingPredicate));
     }
 
@@ -193,7 +191,7 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
     }
 
     protected PlayState movementPredicate(AnimationTest<GeoAnimatable> test) {
-        if (!this.isInWater() && !this.onGround()) {
+        if (!this.isInWater() && !this.onGround() && this.isFlying()) {
             test.setControllerSpeed(1.75F);
             return test.setAndContinue(FLY);
         } else {
@@ -229,7 +227,7 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
         if (this.swinging && test.controller().getAnimationState().equals(AnimationController.State.STOPPED)) {
             test.controller().forceAnimationReset();
             if (this.isInWater()) {
-                test.setControllerSpeed(2.0F);
+                test.setControllerSpeed(1.5F);
                 test.controller().setAnimation(BITE_UNDERWATER);
             } else {
                 test.setControllerSpeed(1.25F);
@@ -308,23 +306,37 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
             }
         }
 
+        // Gliding physics
+        BlockPos currentPos = this.getOnPos();
         Vec3 vec3 = this.getDeltaMovement();
-        if (!this.onGround() && vec3.y < (double)0.0F) {
-            this.setDeltaMovement(vec3.multiply(1.0F, 0.6, 1.0F));
+        if (level().getBlockState(currentPos.below()).isAir() && level().getBlockState(currentPos.below().below()).isAir()) {
+            if (!this.onGround() && vec3.y < 0.0) {
+                this.setFlying(true);
+                this.setDeltaMovement(vec3.multiply(1.0, 0.6, 1.0));
+            }
+        } else {
+            if (!this.onGround() && vec3.y < 0.0) {
+                this.setDeltaMovement(vec3.multiply(1.0, 1.0, 1.0));
+            }
         }
 
-        if (this.horizontalCollision) {
+        if (this.onGround() || this.isInWater()) {
+            this.setFlying(false);
+        }
+
+        // Jump over obstacles
+        if (this.horizontalCollision && this.onGround()) {
             this.jumpFromGround();
         }
 
-        if (this.getTarget() != null) {
+        // Don't sprint if decapitated
+        if (this.isDecapitated() || this.getTarget() == null) {
             this.setSprinting(false);
         }
 
-        if (this.isTame()) {
-            if (this.isFollowing() && this.isSitting()) {
-                this.setFollow(false);
-            }
+        // Following overrides sitting
+        if (this.isTame() && this.isFollowing() && this.isSitting()) {
+            this.setFollow(false);
         }
     }
 
@@ -342,11 +354,6 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
 
         if (remainingLife == 0) {
             this.hurt(damageSources().genericKill(), this.getHealth());
-        }
-
-        int sleepTime = this.getRemainingSleepTime();
-        if (this.isSleeping() && sleepTime > 0) {
-            this.setRemainingSleepTime(sleepTime - 1);
         }
 
         int sleepCooldown = this.getRemainingSleepCooldown();
@@ -440,6 +447,7 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
     @Override
     public void die(@NotNull DamageSource cause) {
         super.die(cause);
+        this.setNoAi(true);
 
         if (this.hasGoggles()) {
             this.drop(new ItemStack(Items.GLASS), false, false);
@@ -471,14 +479,14 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
 
     public void setBasiliskType(int type) {
         if (1 <= type && type <= 3) {
-            this.entityData.set(BASILISK_TYPE, type);
+            this.entityData.set(TYPE, type);
         } else {
-            this.entityData.set(BASILISK_TYPE, 1);
+            this.entityData.set(TYPE, 1);
         }
     }
 
     public int getBasiliskType() {
-        return this.entityData.get(BASILISK_TYPE);
+        return this.entityData.get(TYPE);
     }
 
     public int getRemainingPersistentAngerTime() {
@@ -558,6 +566,14 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
         }
     }
 
+    public boolean isFlying() {
+        return this.entityData.get(FLYING);
+    }
+
+    private void setFlying(boolean flying) {
+        this.entityData.set(FLYING, flying);
+    }
+
     public boolean isSleeping() {
         return this.entityData.get(SLEEPING);
     }
@@ -583,6 +599,30 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
     }
 
     @Override
+    public boolean canDrownInFluidType(@NotNull FluidType type) {
+        return false;
+    }
+
+    @Override
+    protected boolean canGlide() {
+        return true;
+    }
+
+    @Override
+    public boolean isBaby() {
+        return false;
+    }
+
+    @Override
+    public boolean isNoGravity() {
+        if (this.isInWater()) {
+            return false;
+        } else {
+            return super.isNoGravity();
+        }
+    }
+
+    @Override
     protected int getBaseExperienceReward(@NotNull ServerLevel serverLevel) {
         return 3;
     }
@@ -594,11 +634,22 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
     public boolean isValidSleepSpot(BlockPos pos) {
         Level level = this.level();
 
-        if (!level.getBlockState(pos).isAir() ||
-                level.getBlockState(pos.below()).isAir() ||
-                level.getBlockState(pos.above()).isAir()
-        ) return false;
+        // Check if position has air block
+        if (!level.getBlockState(pos).isAir()) {
+            return false;
+        }
 
+        // Check if block below is solid
+        if (level.getBlockState(pos.below()).isAir()) {
+            return false;
+        }
+
+        // Position should be air, above should be solid (1-block gap)
+        if (!level.getBlockState(pos.above()).hasLargeCollisionShape()) {
+            return false; // Need a roof
+        }
+
+        // Check for collision
         return level.noCollision(this, this.getBoundingBox().move(
                 pos.getX() + 0.5 - this.getX(),
                 pos.getY() - this.getY(),
@@ -606,14 +657,119 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
         ));
     }
 
-    static class BasiliskPathNavigation extends AmphibiousPathNavigation{
+    private boolean isSlowPrey(LivingEntity entity) {
+        return entity instanceof Chicken && entity.isBaby() ||
+                entity instanceof Tadpole ||
+                entity instanceof Axolotl ||
+                entity.getType().toString().contains("fish");
+    }
+
+    public void travel(@NotNull Vec3 vec3) {
+        if (this.isInWater()) {
+            this.moveRelative(this.getSpeed(), vec3);
+            this.move(MoverType.SELF, this.getDeltaMovement());
+            this.setDeltaMovement(this.getDeltaMovement().scale(0.9));
+        } else {
+            super.travel(vec3);
+        }
+
+    }
+
+    static class BasiliskPathNavigation extends AmphibiousPathNavigation {
         public BasiliskPathNavigation(Mob mob, Level level) {
             super(mob, level);
         }
 
         @Override
-        protected boolean canMoveDirectly(@NotNull Vec3 start, @NotNull Vec3 end) {
-            return super.canMoveDirectly(start, end);
+        public boolean canFloat() {
+            return false;
+        }
+
+        @Override
+        public boolean canCutCorner(@NotNull PathType pathType) {
+            return pathType != PathType.WATER_BORDER && super.canCutCorner(pathType);
+        }
+    }
+
+    static class BasiliskMeleeAttackGoal extends MeleeAttackGoal {
+        private final Basilisk basilisk;
+
+        public BasiliskMeleeAttackGoal(Basilisk basilisk, double speedModifier, boolean followingTargetEvenIfNotSeen) {
+            super(basilisk, speedModifier, followingTargetEvenIfNotSeen);
+            this.basilisk = basilisk;
+        }
+
+        @Override
+        public boolean canUse() {
+            if (basilisk.isDecapitated() || basilisk.isSitting() || basilisk.isFollowing() || basilisk.isSleeping()) {
+                return false;
+            }
+
+            LivingEntity target = basilisk.getTarget();
+            if (target != null) {
+                if (target.getType() != EntityType.CHICKEN &&
+                        target.getType() != EntityType.RABBIT &&
+                        target.getType() != EntityType.FROG &&
+                        target.getType() != EntityType.PARROT &&
+                        target.getType() != EntityType.TADPOLE &&
+                        target.getType() != EntityType.AXOLOTL &&
+                        target.getType() != EntityType.BEE &&
+                        target.getType() != EntityType.CAVE_SPIDER &&
+                        !(target instanceof AbstractFish)) {
+                    return false;
+                } else if (target instanceof TamableAnimal && ((TamableAnimal) target).getOwner() == basilisk.getOwner()) {
+                    return false;
+                } else if (target.isBaby() &&
+                        target.getBoundingBox().getXsize() <= 1.0F &&
+                        target.getBoundingBox().getYsize() <= 1.0F) {
+                    return super.canUse();
+                }
+            }
+
+            return super.canUse();
+        }
+
+        @Override
+        public void tick() {
+            LivingEntity target = basilisk.getTarget();
+            if (target != null) {
+                basilisk.setSprinting(!basilisk.isSlowPrey(target));
+            }
+
+            super.tick();
+        }
+    }
+
+    // Custom hunt goal that only targets prey
+    static class BasiliskHuntGoal extends NearestAttackableTargetGoal<LivingEntity> {
+        private final Basilisk basilisk;
+
+        public BasiliskHuntGoal(Basilisk basilisk) {
+            super(basilisk, LivingEntity.class, 80, false, true, (livingEntity, serverLevel) -> livingEntity.isAlive());
+            this.basilisk = basilisk;
+        }
+
+        @Override
+        public boolean canUse() {
+            // Only hunt if not tamed, or if tamed and not sitting/following
+            if (basilisk.isTame()) {
+                if (basilisk.isSitting() || basilisk.isFollowing()) {
+                    return false;
+                }
+            }
+
+            // Don't hunt if decapitated, sleeping, or already has target
+            if (basilisk.isDecapitated() || basilisk.isSleeping() || basilisk.getTarget() != null) {
+                return false;
+            }
+
+            return super.canUse();
+        }
+
+        @Override
+        public void start() {
+            super.start();
+            basilisk.setTarget(this.target);
         }
     }
 
@@ -639,17 +795,14 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
             RandomSource random = basilisk.getRandom();
             if (random.nextInt(interval) != 0) return false;
 
-            Vec3 landTarget = DefaultRandomPos.getPos(basilisk, 10, 10);
-            Vec3 waterTarget = getWaterPos(random);
+            Vec3 targetPos = findNearbyPos(random);
+            if (targetPos == null) {
+                return false;
+            }
 
-            Vec3 chosen = basilisk.random.nextInt(2) == 0 ? waterTarget : landTarget;
-            if (landTarget == null) chosen = waterTarget;
-            if (waterTarget == null) chosen = landTarget;
-            if (chosen == null) return false;
-
-            this.x = chosen.x;
-            this.y = chosen.y;
-            this.z = chosen.z;
+            this.x = targetPos.x;
+            this.y = targetPos.y;
+            this.z = targetPos.z;
             return true;
         }
 
@@ -663,18 +816,34 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
             basilisk.getNavigation().moveTo(x, y, z, speedModifier);
         }
 
-        private Vec3 getWaterPos(RandomSource random) {
-            int radius = 15;
-            for (int i = 0; i < 20; i++) {
-                int dx = random.nextInt(radius * 2) - radius;
+        private Vec3 findNearbyPos(RandomSource random) {
+            for (int i = 0; i < 10; i++) {
+                int dx = random.nextInt(32) - 16;
                 int dy = random.nextInt(6) - 3;
-                int dz = random.nextInt(radius * 2) - radius;
+                int dz = random.nextInt(32) - 16;
 
-                var pos = basilisk.blockPosition().offset(dx, dy, dz);
-                if (basilisk.level().getBlockState(pos).liquid()) {
-                    return new Vec3(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
+                BlockPos mobPos = basilisk.blockPosition();
+                BlockPos validSleepSpot = null;
+                for (BlockPos pos : BlockPos.betweenClosed(
+                        mobPos.offset(-8, -2, -8),
+                        mobPos.offset(8, 2, 8))) {
+
+                    if (basilisk.isValidSleepSpot(pos) && !basilisk.level().canSeeSky(pos)) {
+                        validSleepSpot = pos.immutable();
+                    }
+                }
+
+                BlockPos targetPos = Objects.requireNonNullElse(validSleepSpot, mobPos).offset(dx, dy, dz);
+
+                // Prefer water or land positions
+                if (basilisk.level().getBlockState(targetPos).liquid()) {
+                    return new Vec3(targetPos.getX() + 0.5, targetPos.getY() + 1, targetPos.getZ() + 0.5);
+                } else if (basilisk.level().getBlockState(targetPos).isAir() &&
+                        !basilisk.level().getBlockState(targetPos.below()).isAir()) {
+                    return new Vec3(targetPos.getX() + 0.5, targetPos.getY(), targetPos.getZ() + 0.5);
                 }
             }
+
             return null;
         }
     }
@@ -722,22 +891,24 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
 
         public BasiliskSleepGoal(Basilisk basilisk) {
             this.basilisk = basilisk;
-            this.setFlags(EnumSet.of(Flag.MOVE));
+            this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
         }
 
         @Override
         public boolean canUse() {
             if (basilisk.getTarget() != null ||
-                    this.basilisk.isSitting() ||
-                    this.basilisk.isFollowing() ||
-                    this.basilisk.getRemainingSleepCooldown() > 0
-            ) return false;
+                    basilisk.isSitting() ||
+                    basilisk.isFollowing() ||
+                    basilisk.getRemainingSleepCooldown() > 0) {
+                return false;
+            }
 
             BlockPos mobPos = basilisk.blockPosition();
+            for (BlockPos pos : BlockPos.betweenClosed(
+                    mobPos.offset(-8, -2, -8),
+                    mobPos.offset(8, 2, 8))) {
 
-            // Scan in a radius around the Basilisk
-            for (BlockPos pos : BlockPos.betweenClosed(mobPos.offset(-8, -2, -8), mobPos.offset(8, 2, 8))) {
-                if (basilisk.isValidSleepSpot(pos)) {
+                if (basilisk.isValidSleepSpot(pos) && basilisk.getNavigation().createPath(pos, 0) != null) {
                     targetPos = pos.immutable();
                     return true;
                 }
@@ -748,38 +919,68 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
 
         @Override
         public boolean canContinueToUse() {
-            return !basilisk.isFollowing() &&
-                    !this.basilisk.isSitting() &&
-                    targetPos != null &&
-                    basilisk.distanceToSqr(Vec3.atCenterOf(targetPos)) > 1.0D &&
-                    this.basilisk.getRemainingSleepTime() > 0;
+            if (basilisk.isFollowing() || basilisk.isSitting() || basilisk.isAngry()) {
+                return false;
+            }
+
+            if (targetPos == null) {
+                return false;
+            }
+
+            // If already sleeping, continue until sleep time runs out
+            if (basilisk.isSleeping()) {
+                return basilisk.getRemainingSleepTime() > 0;
+            }
+
+            // Continue navigating
+            return basilisk.getNavigation().createPath(targetPos, 0) != null;
         }
 
         @Override
         public void start() {
             if (targetPos != null) {
-                basilisk.getNavigation().moveTo(
-                        targetPos.getX(),
-                        targetPos.getY(),
-                        targetPos.getZ(),
-                        1.0
-                );
+                System.out.println("Basilisk starting sleep journey to: " + targetPos);
             }
         }
 
         @Override
         public void tick() {
-            if (targetPos != null && basilisk.distanceToSqr(Vec3.atCenterOf(targetPos)) < 1.5D && !basilisk.level().getBlockState(basilisk.getOnPos().above()).isAir()) {
-                basilisk.setSleeping(true);
-                basilisk.startSleepTimer();
+            if (targetPos == null) return;
+
+            double dist = basilisk.distanceToSqr(Vec3.atCenterOf(targetPos));
+
+            if (!basilisk.isSleeping()) {
+                // If close enough, start sleeping
+                if (dist <= 1 && !basilisk.level().canSeeSky(targetPos) && basilisk.isValidSleepSpot(targetPos)) {
+                    basilisk.setSleeping(true);
+                    basilisk.startSleepTimer();
+                    System.out.println("Basilisk reached " + targetPos );
+                } else {
+                    stop();
+                }
+            } else {
+                // Handle sleep countdown
+                int remainingTime = basilisk.getRemainingSleepTime();
+                if (remainingTime > 0) {
+                    basilisk.setRemainingSleepTime(remainingTime - 1);
+
+                    // Wake up if disturbed
+                    if (basilisk.getTarget() != null) {
+                        stop();
+                    }
+                } else {
+                    stop();
+                }
             }
         }
 
         @Override
         public void stop() {
+            System.out.println("Basilisk stopped trying to reach " + targetPos );
+            targetPos = null;
             basilisk.setSleeping(false);
             basilisk.startSleepCooldown();
-            targetPos = null;
+            basilisk.getNavigation().recomputePath();
         }
     }
 
@@ -818,10 +1019,20 @@ public class Basilisk extends FollowWanderSitAnimal implements NeutralMob, GeoAn
 
             // Get nearby non-affiliated entities
             List<LivingEntity> nearbyEntities = this.basilisk.level().getEntitiesOfClass(LivingEntity.class, this.basilisk.getBoundingBox().inflate(20.0F));
+            // Filter out owner, owner's pets, and other basilisks
             nearbyEntities = nearbyEntities.stream().filter(entity -> {
-                if ((entity instanceof TamableAnimal) && Objects.equals(((TamableAnimal) entity).getOwner(), this.basilisk.getOwner())) {
+                if (entity instanceof TamableAnimal tamable &&
+                        Objects.equals(tamable.getOwner(), basilisk.getOwner())) {
                     return false;
-                } else return !entity.equals(this.basilisk.getOwner());
+                }
+                if (entity.equals(basilisk.getOwner())) {
+                    return false;
+                }
+                if (entity instanceof Basilisk || entity instanceof BasiliskChick) {
+                    return false;
+                }
+
+                return !entity.getItemBySlot(EquipmentSlot.HEAD).is(BensBeastiary.GOGGLES.get());
             }).toList();
 
             nearbyEntities = nearbyEntities.stream().filter(entity -> !(entity instanceof Basilisk) && !(entity instanceof BasiliskChick) && !entity.getItemBySlot(EquipmentSlot.HEAD).is(BensBeastiary.GOGGLES.get())).toList();

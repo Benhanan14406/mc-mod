@@ -69,7 +69,7 @@ public class BensBeastiary {
     // Basilisk
     public static ResourceKey<EntityType<?>> BASILISK_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("basilisk"));
     public static final DeferredHolder<EntityType<?>, EntityType<Basilisk>> BASILISK = ENTITIES.register("basilisk",
-            () -> EntityType.Builder.of(Basilisk::new, MobCategory.CREATURE).sized(1f, 1f).build(BASILISK_KEY));
+            () -> EntityType.Builder.of(Basilisk::new, MobCategory.CREATURE).sized(1.0f, 1.0f).build(BASILISK_KEY));
 
     // Basilisk Chick
     public static ResourceKey<EntityType<?>> BASILISK_CHICK_KEY = ResourceKey.create(Registries.ENTITY_TYPE, ResourceLocation.withDefaultNamespace("basilisk_chick"));

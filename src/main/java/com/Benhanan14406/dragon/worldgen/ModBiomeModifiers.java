@@ -68,7 +68,11 @@ public class ModBiomeModifiers {
                         biomes.getOrThrow(Biomes.FOREST),
                         biomes.getOrThrow(Biomes.FLOWER_FOREST),
                         biomes.getOrThrow(Biomes.BIRCH_FOREST),
-                        biomes.getOrThrow(Biomes.OLD_GROWTH_BIRCH_FOREST)
+                        biomes.getOrThrow(Biomes.OLD_GROWTH_BIRCH_FOREST),
+                        biomes.getOrThrow(Biomes.SAVANNA),
+                        biomes.getOrThrow(Biomes.TAIGA),
+                        biomes.getOrThrow(Biomes.OLD_GROWTH_PINE_TAIGA),
+                        biomes.getOrThrow(Biomes.OLD_GROWTH_SPRUCE_TAIGA)
                 ),
                 WeightedList.of(new MobSpawnSettings.SpawnerData(BensBeastiary.BASILISK.get(), 1, 4))));
     }
